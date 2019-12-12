@@ -1,6 +1,6 @@
-name:                day02
+name:                intcode
 version:             0.1.0.0
-github:              "githubuser/day02"
+github:              "githubuser/intcode"
 license:             BSD3
 author:              "Author name here"
 maintainer:          "example@example.com"
@@ -17,19 +17,29 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/day02#readme>
+description:         Please see the README on GitHub at <https://github.com/githubuser/intcode#readme>
 
 dependencies:
 - base >= 4.7 && < 5
 
-executables:
-  day02-exe:
-    main:                Main.hs
-    source-dirs:         app
+default-extensions:
+- OverloadedStrings
+
+library:
+  source-dirs: src
+  dependencies:
+  - text
+  - vector
+  - text-show
+
+tests:
+  intcode-test:
+    main:                Spec.hs
+    source-dirs:         test
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - text
     - intcode
+    - hspec
