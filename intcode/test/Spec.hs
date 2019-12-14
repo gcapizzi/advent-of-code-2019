@@ -1,5 +1,5 @@
 import Test.Hspec
-import Intcode (run, runWithParams)
+import Intcode
 
 main :: IO ()
 main = hspec $ do
@@ -16,6 +16,11 @@ main = hspec $ do
       run "1,0" `shouldBe` Left "Invalid address"
       run "1,0,0" `shouldBe` Left "Invalid address"
       run "1,0,0,0" `shouldBe` Left "Invalid address"
+
   describe "runWithParams" $
     it "replaces the two parameters at addresses 1 and 2, runs the program, returns position 0" $
       runWithParams "1,0,0,4,99,5,6,0,99" 1 1 `shouldBe` Right 30
+
+  describe "runWithIO" $
+    it "receives inputs and returns outputs" $
+      runWithIO ("3,5,4,5,99,0", [42])  `shouldBe` Right ("3,5,4,5,99,42", [42])
