@@ -17,7 +17,7 @@ type Program = Vector Int
 data State = State { program :: Program, address :: Int, inputs :: [Int], outputs :: [Int] }
 
 data ParameterMode = Position | Immediate deriving (Eq)
-data Instruction = Add | Multiply | Set | Get | Exit
+data Instruction = Add | Multiply | Set | Get | JumpIfTrue | JumpIfFalse | LessThan | Equals | Exit
 data OpCode = OpCode Instruction [ParameterMode]
 
 run :: Text -> Either String Text
@@ -59,19 +59,31 @@ runProgramWith state@State { program=prg, address=addr, inputs=is, outputs=os } 
         Multiply -> runBinaryOperation (*) parameterModes state >>= runProgramWith
         Set -> runSet state >>= runProgramWith
         Get -> runGet parameterModes state >>= runProgramWith
+        JumpIfTrue -> runJumpIf True parameterModes state >>= runProgramWith
+        JumpIfFalse -> runJumpIf False parameterModes state >>= runProgramWith
+        LessThan -> runBinaryOperation lessThan parameterModes state >>= runProgramWith
+        Equals -> runBinaryOperation equals parameterModes state >>= runProgramWith
         Exit -> return state
 
 runBinaryOperation :: (Int -> Int -> Int) -> [ParameterMode] -> State -> Either String State
 runBinaryOperation op parameterModes state@State{program = prg, address = addr} = do
     let leftParameterMode = head parameterModes
-    leftParameter <- get prg (addr + 1)
+    leftValue <- getWithMode leftParameterMode prg (addr + 1)
     let rightParameterMode = parameterModes !! 1
-    rightParameter <- get prg (addr + 2)
+    rightValue <- getWithMode rightParameterMode prg (addr + 2)
     resultAddress <- get prg (addr + 3)
-    leftValue <- if leftParameterMode == Immediate then Right leftParameter else get prg leftParameter
-    rightValue <- if rightParameterMode == Immediate then Right rightParameter else get prg rightParameter
     newPrg <- set prg resultAddress (leftValue `op` rightValue)
     return state { program = newPrg, address = addr + 4 }
+
+lessThan :: Int -> Int -> Int
+lessThan x y
+    | x < y = 1
+    | otherwise = 0
+
+equals :: Int -> Int -> Int
+equals x y
+    | x == y = 1
+    | otherwise = 0
 
 runSet :: State -> Either String State
 runSet state@State { program = prg, address = addr, inputs = is } = do
@@ -81,13 +93,26 @@ runSet state@State { program = prg, address = addr, inputs = is } = do
 
 runGet :: [ParameterMode] -> State -> Either String State
 runGet parameterModes state@State { program = prg, address = addr, outputs = os } = do
-    let sourceParameterMode = head parameterModes
-    sourceParameter <- get prg (addr + 1)
-    value <- if sourceParameterMode == Immediate then Right sourceParameter else get prg sourceParameter
+    let parameterMode = head parameterModes
+    value <- getWithMode parameterMode prg (addr + 1)
     return state { address = addr + 2, outputs = value:os }
+
+runJumpIf :: Bool -> [ParameterMode] -> State -> Either String State
+runJumpIf nonZero parameterModes state@State{program = prg, address = addr} = do
+    let conditionParameterMode = head parameterModes
+    conditionValue <- getWithMode conditionParameterMode prg (addr + 1)
+    let destinationParameterMode = parameterModes !! 1
+    destinationValue <- getWithMode destinationParameterMode prg (addr + 2)
+    if (conditionValue /= 0) == nonZero
+        then return state { address = destinationValue }
+        else return state { address = addr + 3 }
 
 get :: Program -> Int -> Either String Int
 get program address = maybe (Left "Invalid address") Right (program V.!? address)
+
+getWithMode :: ParameterMode -> Program -> Int -> Either String Int
+getWithMode Immediate program address = get program address
+getWithMode Position program address = get program address >>= get program
 
 set :: Program -> Int -> Int -> Either String Program
 set program address value
@@ -108,6 +133,10 @@ parseInstruction 1 = Right Add
 parseInstruction 2 = Right Multiply
 parseInstruction 3 = Right Set
 parseInstruction 4 = Right Get
+parseInstruction 5 = Right JumpIfTrue
+parseInstruction 6 = Right JumpIfFalse
+parseInstruction 7 = Right LessThan
+parseInstruction 8 = Right Equals
 parseInstruction 99 = Right Exit
 parseInstruction opCode = Left $ "Unrecognized instruction: " ++ show opCode
 

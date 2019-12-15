@@ -23,5 +23,7 @@ main = hspec $ do
       runWithParams "1,0,0,4,99,5,6,0,99" 1 1 `shouldBe` Right 30
 
   describe "runWithIO" $
-    it "receives inputs and returns outputs" $
+    it "receives inputs and returns outputs" $ do
       runWithIO ("3,5,4,5,99,0", [42])  `shouldBe` Right ("3,5,4,5,99,42", [42])
+      snd <$> runWithIO ("3,9,8,9,10,9,4,9,99,-1,8", [8]) `shouldBe` Right [1]
+      snd <$> runWithIO ("3,9,8,9,10,9,4,9,99,-1,8", [7]) `shouldBe` Right [0]
