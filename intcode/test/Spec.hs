@@ -16,6 +16,7 @@ main = hspec $ do
       run "1,0" `shouldBe` Left "Invalid address"
       run "1,0,0" `shouldBe` Left "Invalid address"
       run "1,0,0,0" `shouldBe` Left "Invalid address"
+      run "1002,4,3,4,33" `shouldBe` Right "1002,4,3,4,99"
 
   describe "runWithParams" $
     it "replaces the two parameters at addresses 1 and 2, runs the program, returns position 0" $
