@@ -36,7 +36,9 @@ parseProgram prg = do
     return $ V.fromList intInstructions
 
 parseInt :: Text -> Either String Int
-parseInt txt = fst <$> T.decimal txt
+parseInt txt
+    | T.head txt == '-' = negate <$> parseInt (T.tail txt)
+    | otherwise = fst <$> T.decimal txt
 
 runProgram :: (Program, [Int]) -> Either String (Program, [Int])
 runProgram (prg, is) = do
