@@ -10,4 +10,4 @@ main = do
   args <- getArgs
   sourceCode <- TIO.readFile $ head args
   let inputs = map read $ tail args
-  print $ Intcode.runWithIO (sourceCode, inputs)
+  print $ Intcode.run (sourceCode, inputs)

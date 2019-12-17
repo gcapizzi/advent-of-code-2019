@@ -9,4 +9,4 @@ main :: IO ()
 main = do
   args <- getArgs
   sourceCode <- TIO.readFile $ head args
-  print $ Intcode.runWithIO (sourceCode, [5])
+  print $ Intcode.run (sourceCode, [5])

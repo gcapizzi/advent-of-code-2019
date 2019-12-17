@@ -22,6 +22,9 @@ description:         Please see the README on GitHub at <https://github.com/gith
 dependencies:
 - base >= 4.7 && < 5
 
+default-extensions:
+- OverloadedStrings
+
 executables:
   day02-exe:
     main:                Main.hs
@@ -32,4 +35,5 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - text
+    - text-show
     - intcode

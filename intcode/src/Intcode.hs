@@ -1,7 +1,5 @@
 module Intcode
     ( run
-    , runWithParams
-    , runWithIO
     ) where
 
 import Data.Vector (Vector)
@@ -20,11 +18,8 @@ data ParameterMode = Position | Immediate deriving (Eq)
 data Instruction = Add | Multiply | Set | Get | JumpIfTrue | JumpIfFalse | LessThan | Equals | Exit
 data OpCode = OpCode Instruction [ParameterMode]
 
-run :: Text -> Either String Text
-run sourceCode = fst <$> runWithIO (sourceCode, [])
-
-runWithIO :: (Text, [Int]) -> Either String (Text, [Int])
-runWithIO (sourceCode, is) = do
+run :: (Text, [Int]) -> Either String (Text, [Int])
+run (sourceCode, is) = do
     prg <- parseProgram sourceCode
     (newPrg, os) <- runProgram (prg, is)
     return (unparseProgram newPrg, os)
@@ -149,11 +144,3 @@ parseParameterMode :: Char -> Either String ParameterMode
 parseParameterMode '0' = Right Position
 parseParameterMode '1' = Right Immediate
 parseParameterMode x = Left $ "Unrecognized parameter mode: " ++ show x
-
-runWithParams :: Text -> Int -> Int -> Either String Int
-runWithParams sourceCode noun verb = do
-    program <- parseProgram sourceCode
-    program' <- set program 1 noun
-    program'' <- set program' 2 verb
-    (newProgram, _) <- runProgram (program'', [])
-    return $ V.head newProgram
