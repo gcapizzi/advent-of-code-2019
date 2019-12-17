@@ -26,6 +26,8 @@ main = hspec $ do
       outputs <$> runSrcWithInputs "3,9,8,9,10,9,4,9,99,-1,8" [8] `shouldBe` Right [1]
       outputs <$> runSrcWithInputs "3,9,8,9,10,9,4,9,99,-1,8" [7] `shouldBe` Right [0]
 
+      address <$> runSrcWithInputs "3,5,4,5,99,0" [] `shouldBe` Right 0
+
 runSrcWithInputs :: Text -> [Int] -> Either String Program
 runSrcWithInputs src inputs = do
     program <- parse src

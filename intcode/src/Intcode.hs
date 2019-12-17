@@ -35,14 +35,14 @@ run program@Program { instructions=ins, address=addr, inputs=is, outputs=os } = 
     opCode <- get ins addr
     (OpCode instruction parameterModes) <- parseOpCode opCode
     case instruction of
-        Add -> runBinaryOperation (+) parameterModes program >>= run
-        Multiply -> runBinaryOperation (*) parameterModes program >>= run
-        Set -> runSet program >>= run
-        Get -> runGet parameterModes program >>= run
-        JumpIfTrue -> runJumpIf True parameterModes program >>= run
-        JumpIfFalse -> runJumpIf False parameterModes program >>= run
-        LessThan -> runBinaryOperation lessThan parameterModes program >>= run
-        Equals -> runBinaryOperation equals parameterModes program >>= run
+        Add -> runBinaryOperation (+) parameterModes program
+        Multiply -> runBinaryOperation (*) parameterModes program
+        Set -> runSet program
+        Get -> runGet parameterModes program
+        JumpIfTrue -> runJumpIf True parameterModes program
+        JumpIfFalse -> runJumpIf False parameterModes program
+        LessThan -> runBinaryOperation lessThan parameterModes program
+        Equals -> runBinaryOperation equals parameterModes program
         Exit -> return program
 
 runBinaryOperation :: (Int -> Int -> Int) -> [ParameterMode] -> Program -> Either String Program
@@ -53,7 +53,7 @@ runBinaryOperation op parameterModes program@Program{instructions = ins, address
     rightValue <- getWithMode rightParameterMode ins (addr + 2)
     resultAddress <- get ins (addr + 3)
     newIns <- set ins resultAddress (leftValue `op` rightValue)
-    return program { instructions = newIns, address = addr + 4 }
+    run program { instructions = newIns, address = addr + 4 }
 
 lessThan :: Int -> Int -> Int
 lessThan x y
@@ -66,16 +66,17 @@ equals x y
     | otherwise = 0
 
 runSet :: Program -> Either String Program
+runSet program@Program { inputs = [] } = return program
 runSet program@Program { instructions = ins, address = addr, inputs = is } = do
     destAddress <- get ins (addr + 1)
     newIns <- set ins destAddress (head is)
-    return program { instructions = newIns, address = addr + 2, inputs = tail is }
+    run program { instructions = newIns, address = addr + 2, inputs = tail is }
 
 runGet :: [ParameterMode] -> Program -> Either String Program
 runGet parameterModes program@Program { instructions = ins, address = addr, outputs = os } = do
     let parameterMode = head parameterModes
     value <- getWithMode parameterMode ins (addr + 1)
-    return program { address = addr + 2, outputs = value:os }
+    run program { address = addr + 2, outputs = value:os }
 
 runJumpIf :: Bool -> [ParameterMode] -> Program -> Either String Program
 runJumpIf nonZero parameterModes program@Program{instructions = prg, address = addr} = do
@@ -84,8 +85,8 @@ runJumpIf nonZero parameterModes program@Program{instructions = prg, address = a
     let destinationParameterMode = parameterModes !! 1
     destinationValue <- getWithMode destinationParameterMode prg (addr + 2)
     if (conditionValue /= 0) == nonZero
-        then return program { address = destinationValue }
-        else return program { address = addr + 3 }
+        then run program { address = destinationValue }
+        else run program { address = addr + 3 }
 
 get :: Vector Int -> Int -> Either String Int
 get program address = maybe (Left "Invalid address") Right (program V.!? address)
