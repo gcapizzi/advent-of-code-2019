@@ -32,6 +32,18 @@ library:
   - vector
   - text-show
 
+executables:
+  intcode:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - intcode
+    - text
+
 tests:
   intcode-test:
     main:                Spec.hs
