@@ -1,5 +1,7 @@
 module Intcode
-    ( run
+    ( Program(..)
+    , parse
+    , run
     ) where
 
 import Data.Vector (Vector)
@@ -10,65 +12,48 @@ import qualified Data.Text.Read as T
 import TextShow
 import Data.Maybe
 
-type Program = Vector Int
+data Program = Program { instructions :: Vector Int, address :: Int, inputs :: [Int], outputs :: [Int] }
+  deriving (Eq, Show)
 
-data State = State { program :: Program, address :: Int, inputs :: [Int], outputs :: [Int] }
-
+data OpCode = OpCode InstructionType [ParameterMode]
+data InstructionType = Add | Multiply | Set | Get | JumpIfTrue | JumpIfFalse | LessThan | Equals | Exit
 data ParameterMode = Position | Immediate deriving (Eq)
-data Instruction = Add | Multiply | Set | Get | JumpIfTrue | JumpIfFalse | LessThan | Equals | Exit
-data OpCode = OpCode Instruction [ParameterMode]
 
-run :: (Text, [Int]) -> Either String (Text, [Int])
-run (sourceCode, is) = do
-    prg <- parseProgram sourceCode
-    (newPrg, os) <- runProgram (prg, is)
-    return (unparseProgram newPrg, os)
-
-parseProgram :: Text -> Either String Program
-parseProgram prg = do
-    let txtInstructions = T.splitOn "," prg
+parse :: Text -> Either String Program
+parse sourceCode = do
+    let txtInstructions = T.splitOn "," sourceCode
     intInstructions <- mapM parseInt txtInstructions
-    return $ V.fromList intInstructions
+    return $ Program { instructions = V.fromList intInstructions, address = 0, inputs = [], outputs = [] }
 
 parseInt :: Text -> Either String Int
 parseInt txt
     | T.head txt == '-' = negate <$> parseInt (T.tail txt)
     | otherwise = fst <$> T.decimal txt
 
-runProgram :: (Program, [Int]) -> Either String (Program, [Int])
-runProgram (prg, is) = do
-    newState <- runProgramWith State
-        { address = 0
-        , program = prg
-        , inputs = is
-        , outputs = []
-        }
-    return (program newState, outputs newState)
-
-runProgramWith :: State -> Either String State
-runProgramWith state@State { program=prg, address=addr, inputs=is, outputs=os } = do
-    opCode <- get prg addr
+run :: Program -> Either String Program
+run program@Program { instructions=ins, address=addr, inputs=is, outputs=os } = do
+    opCode <- get ins addr
     (OpCode instruction parameterModes) <- parseOpCode opCode
     case instruction of
-        Add -> runBinaryOperation (+) parameterModes state >>= runProgramWith
-        Multiply -> runBinaryOperation (*) parameterModes state >>= runProgramWith
-        Set -> runSet state >>= runProgramWith
-        Get -> runGet parameterModes state >>= runProgramWith
-        JumpIfTrue -> runJumpIf True parameterModes state >>= runProgramWith
-        JumpIfFalse -> runJumpIf False parameterModes state >>= runProgramWith
-        LessThan -> runBinaryOperation lessThan parameterModes state >>= runProgramWith
-        Equals -> runBinaryOperation equals parameterModes state >>= runProgramWith
-        Exit -> return state
+        Add -> runBinaryOperation (+) parameterModes program >>= run
+        Multiply -> runBinaryOperation (*) parameterModes program >>= run
+        Set -> runSet program >>= run
+        Get -> runGet parameterModes program >>= run
+        JumpIfTrue -> runJumpIf True parameterModes program >>= run
+        JumpIfFalse -> runJumpIf False parameterModes program >>= run
+        LessThan -> runBinaryOperation lessThan parameterModes program >>= run
+        Equals -> runBinaryOperation equals parameterModes program >>= run
+        Exit -> return program
 
-runBinaryOperation :: (Int -> Int -> Int) -> [ParameterMode] -> State -> Either String State
-runBinaryOperation op parameterModes state@State{program = prg, address = addr} = do
+runBinaryOperation :: (Int -> Int -> Int) -> [ParameterMode] -> Program -> Either String Program
+runBinaryOperation op parameterModes program@Program{instructions = ins, address = addr} = do
     let leftParameterMode = head parameterModes
-    leftValue <- getWithMode leftParameterMode prg (addr + 1)
+    leftValue <- getWithMode leftParameterMode ins (addr + 1)
     let rightParameterMode = parameterModes !! 1
-    rightValue <- getWithMode rightParameterMode prg (addr + 2)
-    resultAddress <- get prg (addr + 3)
-    newPrg <- set prg resultAddress (leftValue `op` rightValue)
-    return state { program = newPrg, address = addr + 4 }
+    rightValue <- getWithMode rightParameterMode ins (addr + 2)
+    resultAddress <- get ins (addr + 3)
+    newIns <- set ins resultAddress (leftValue `op` rightValue)
+    return program { instructions = newIns, address = addr + 4 }
 
 lessThan :: Int -> Int -> Int
 lessThan x y
@@ -80,60 +65,57 @@ equals x y
     | x == y = 1
     | otherwise = 0
 
-runSet :: State -> Either String State
-runSet state@State { program = prg, address = addr, inputs = is } = do
-    destAddress <- get prg (addr + 1)
-    newPrg <- set prg destAddress (head is)
-    return state { program = newPrg, address = addr + 2, inputs = tail is }
+runSet :: Program -> Either String Program
+runSet program@Program { instructions = ins, address = addr, inputs = is } = do
+    destAddress <- get ins (addr + 1)
+    newIns <- set ins destAddress (head is)
+    return program { instructions = newIns, address = addr + 2, inputs = tail is }
 
-runGet :: [ParameterMode] -> State -> Either String State
-runGet parameterModes state@State { program = prg, address = addr, outputs = os } = do
+runGet :: [ParameterMode] -> Program -> Either String Program
+runGet parameterModes program@Program { instructions = ins, address = addr, outputs = os } = do
     let parameterMode = head parameterModes
-    value <- getWithMode parameterMode prg (addr + 1)
-    return state { address = addr + 2, outputs = value:os }
+    value <- getWithMode parameterMode ins (addr + 1)
+    return program { address = addr + 2, outputs = value:os }
 
-runJumpIf :: Bool -> [ParameterMode] -> State -> Either String State
-runJumpIf nonZero parameterModes state@State{program = prg, address = addr} = do
+runJumpIf :: Bool -> [ParameterMode] -> Program -> Either String Program
+runJumpIf nonZero parameterModes program@Program{instructions = prg, address = addr} = do
     let conditionParameterMode = head parameterModes
     conditionValue <- getWithMode conditionParameterMode prg (addr + 1)
     let destinationParameterMode = parameterModes !! 1
     destinationValue <- getWithMode destinationParameterMode prg (addr + 2)
     if (conditionValue /= 0) == nonZero
-        then return state { address = destinationValue }
-        else return state { address = addr + 3 }
+        then return program { address = destinationValue }
+        else return program { address = addr + 3 }
 
-get :: Program -> Int -> Either String Int
+get :: Vector Int -> Int -> Either String Int
 get program address = maybe (Left "Invalid address") Right (program V.!? address)
 
-getWithMode :: ParameterMode -> Program -> Int -> Either String Int
+getWithMode :: ParameterMode -> Vector Int -> Int -> Either String Int
 getWithMode Immediate program address = get program address
 getWithMode Position program address = get program address >>= get program
 
-set :: Program -> Int -> Int -> Either String Program
-set program address value
-    | address < V.length program = Right $ program V.// [(address, value)]
+set :: Vector Int -> Int -> Int -> Either String (Vector Int)
+set instructions address value
+    | address < V.length instructions = Right $ instructions V.// [(address, value)]
     | otherwise = Left "Invalid address"
-
-unparseProgram :: Program -> Text
-unparseProgram = T.intercalate "," . V.toList . V.map showt
 
 parseOpCode :: Int -> Either String OpCode
 parseOpCode opCode = do
-  instruction <- parseInstruction (opCode `mod` 100)
+  instruction <- parseInstructionType (opCode `mod` 100)
   parameterModes <- parseParameterModes (opCode `div` 100)
   return $ OpCode instruction parameterModes
 
-parseInstruction :: Int -> Either String Instruction
-parseInstruction 1 = Right Add
-parseInstruction 2 = Right Multiply
-parseInstruction 3 = Right Set
-parseInstruction 4 = Right Get
-parseInstruction 5 = Right JumpIfTrue
-parseInstruction 6 = Right JumpIfFalse
-parseInstruction 7 = Right LessThan
-parseInstruction 8 = Right Equals
-parseInstruction 99 = Right Exit
-parseInstruction opCode = Left $ "Unrecognized instruction: " ++ show opCode
+parseInstructionType :: Int -> Either String InstructionType
+parseInstructionType 1 = Right Add
+parseInstructionType 2 = Right Multiply
+parseInstructionType 3 = Right Set
+parseInstructionType 4 = Right Get
+parseInstructionType 5 = Right JumpIfTrue
+parseInstructionType 6 = Right JumpIfFalse
+parseInstructionType 7 = Right LessThan
+parseInstructionType 8 = Right Equals
+parseInstructionType 99 = Right Exit
+parseInstructionType opCode = Left $ "Unrecognized instruction type: " ++ show opCode
 
 parseParameterModes :: Int -> Either String [ParameterMode]
 parseParameterModes x = do

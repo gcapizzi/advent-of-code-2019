@@ -21,6 +21,7 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
+- text
 
 default-extensions:
 - OverloadedStrings
@@ -28,7 +29,6 @@ default-extensions:
 library:
   source-dirs: src
   dependencies:
-  - text
   - vector
   - text-show
 
@@ -42,7 +42,6 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - intcode
-    - text
 
 tests:
   intcode-test:
@@ -54,4 +53,5 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - intcode
+    - vector
     - hspec
