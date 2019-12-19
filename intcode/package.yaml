@@ -29,7 +29,7 @@ default-extensions:
 library:
   source-dirs: src
   dependencies:
-  - vector
+  - containers
   - text-show
 
 executables:
@@ -53,5 +53,5 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - intcode
-    - vector
+    - containers
     - hspec

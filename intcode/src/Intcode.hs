@@ -4,8 +4,8 @@ module Intcode
     , run
     ) where
 
-import Data.Vector (Vector)
-import qualified Data.Vector as V
+import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Read as T
@@ -15,7 +15,7 @@ import Data.Maybe
 import Debug.Trace
 
 data Program = Program
-    { instructions :: Vector Int
+    { instructions :: IntMap Int
     , address :: Int
     , inputs :: [Int]
     , outputs :: [Int]
@@ -49,7 +49,7 @@ parse sourceCode = do
     let txtInstructions = T.splitOn "," sourceCode
     intInstructions <- mapM parseInt txtInstructions
     return $ Program
-        { instructions = V.fromList intInstructions
+        { instructions = M.fromList (zip [0..] intInstructions)
         , address = 0
         , inputs = []
         , outputs = []
@@ -137,8 +137,10 @@ getWithMode Relative Program{instructions = ins, relativeBase = rb} address = do
     ref <- get ins address
     get ins (ref + rb)
 
-get :: Vector Int -> Int -> Either String Int
-get instructions address = maybe (Left "Invalid address") Right (instructions V.!? address)
+get :: IntMap Int -> Int -> Either String Int
+get instructions address
+    | address >= 0 = Right $ fromMaybe 0 (instructions M.!? address)
+    | otherwise = Left "Invalid address"
 
 setWithMode :: ParameterMode -> Program -> Int -> Int -> Either String Program
 setWithMode Position program@Program{instructions = ins} address value = do
@@ -149,9 +151,9 @@ setWithMode Relative program@Program{instructions = ins, relativeBase = rb} addr
     newIns <- set ins (address + rb) value
     return program { instructions = newIns }
 
-set :: Vector Int -> Int -> Int -> Either String (Vector Int)
+set :: IntMap Int -> Int -> Int -> Either String (IntMap Int)
 set instructions address value
-    | address < V.length instructions = Right $ instructions V.// [(address, value)]
+    | address >= 0 = Right $ M.insert address value instructions
     | otherwise = Left "Invalid address"
 
 parseOpCode :: Int -> Either String OpCode
