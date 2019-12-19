@@ -4,9 +4,9 @@ import qualified Data.Vector as V
 import Data.Text (Text)
 
 main :: IO ()
-main = hspec $ do
+main = hspec $
   describe "run" $
-    it "receives inputs and returns outputs" $ do
+    it "is a complete Incode computer" $ do
       instructions <$> runSrc "1,0,0,0,99" `shouldBe` Right (V.fromList [2,0,0,0,99])
       instructions <$> runSrc "2,3,0,3,99" `shouldBe` Right (V.fromList [2,3,0,6,99])
       instructions <$> runSrc "2,4,4,5,99,0" `shouldBe` Right (V.fromList [2,4,4,5,99,9801])
@@ -27,6 +27,10 @@ main = hspec $ do
       outputs <$> runSrcWithInputs "3,9,8,9,10,9,4,9,99,-1,8" [7] `shouldBe` Right [0]
 
       address <$> runSrcWithInputs "3,5,4,5,99,0" [] `shouldBe` Right 0
+
+      instructions <$> runSrc "1202,4,3,4,33" `shouldBe` Right (V.fromList [1202,4,3,4,99])
+      instructions <$> runSrc "109,-5,1202,11,3,6,33" `shouldBe` Right (V.fromList [109,-5,1202,11,3,6,99])
+      instructions <$> runSrc "109,-5,21202,11,3,11,33" `shouldBe` Right (V.fromList [109,-5,21202,11,3,11,99])
 
 runSrcWithInputs :: Text -> [Int] -> Either String Program
 runSrcWithInputs src inputs = do

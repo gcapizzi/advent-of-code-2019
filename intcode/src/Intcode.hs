@@ -12,18 +12,49 @@ import qualified Data.Text.Read as T
 import TextShow
 import Data.Maybe
 
-data Program = Program { instructions :: Vector Int, address :: Int, inputs :: [Int], outputs :: [Int] }
+import Debug.Trace
+
+data Program = Program
+    { instructions :: Vector Int
+    , address :: Int
+    , inputs :: [Int]
+    , outputs :: [Int]
+    , relativeBase :: Int
+    }
+    deriving (Eq, Show)
+
+data OpCode = OpCode InstructionType [ParameterMode] deriving (Eq, Show)
+
+data InstructionType =
+    Add
+  | Multiply
+  | Set
+  | Get
+  | JumpIfTrue
+  | JumpIfFalse
+  | LessThan
+  | Equals
+  | SetRelativeBase
+  | Exit
   deriving (Eq, Show)
 
-data OpCode = OpCode InstructionType [ParameterMode]
-data InstructionType = Add | Multiply | Set | Get | JumpIfTrue | JumpIfFalse | LessThan | Equals | Exit
-data ParameterMode = Position | Immediate deriving (Eq)
+data ParameterMode =
+    Position
+  | Immediate
+  | Relative
+  deriving (Eq, Show)
 
 parse :: Text -> Either String Program
 parse sourceCode = do
     let txtInstructions = T.splitOn "," sourceCode
     intInstructions <- mapM parseInt txtInstructions
-    return $ Program { instructions = V.fromList intInstructions, address = 0, inputs = [], outputs = [] }
+    return $ Program
+        { instructions = V.fromList intInstructions
+        , address = 0
+        , inputs = []
+        , outputs = []
+        , relativeBase = 0
+        }
 
 parseInt :: Text -> Either String Int
 parseInt txt
@@ -37,23 +68,25 @@ run program@Program { instructions=ins, address=addr, inputs=is, outputs=os } = 
     case instruction of
         Add -> runBinaryOperation (+) parameterModes program
         Multiply -> runBinaryOperation (*) parameterModes program
-        Set -> runSet program
+        Set -> runSet parameterModes program
         Get -> runGet parameterModes program
         JumpIfTrue -> runJumpIf True parameterModes program
         JumpIfFalse -> runJumpIf False parameterModes program
         LessThan -> runBinaryOperation lessThan parameterModes program
         Equals -> runBinaryOperation equals parameterModes program
+        SetRelativeBase -> runSetRelativeBase parameterModes program
         Exit -> return program
 
 runBinaryOperation :: (Int -> Int -> Int) -> [ParameterMode] -> Program -> Either String Program
 runBinaryOperation op parameterModes program@Program{instructions = ins, address = addr} = do
     let leftParameterMode = head parameterModes
-    leftValue <- getWithMode leftParameterMode ins (addr + 1)
+    leftValue <- getWithMode leftParameterMode program (addr + 1)
     let rightParameterMode = parameterModes !! 1
-    rightValue <- getWithMode rightParameterMode ins (addr + 2)
-    resultAddress <- get ins (addr + 3)
-    newIns <- set ins resultAddress (leftValue `op` rightValue)
-    run program { instructions = newIns, address = addr + 4 }
+    rightValue <- getWithMode rightParameterMode program (addr + 2)
+    let resultParameterMode = parameterModes !! 2
+    resultValue <- get ins (addr + 3)
+    newProgram <- setWithMode resultParameterMode program resultValue (leftValue `op` rightValue)
+    run newProgram { address = addr + 4 }
 
 lessThan :: Int -> Int -> Int
 lessThan x y
@@ -65,35 +98,56 @@ equals x y
     | x == y = 1
     | otherwise = 0
 
-runSet :: Program -> Either String Program
-runSet program@Program { inputs = [] } = return program
-runSet program@Program { instructions = ins, address = addr, inputs = is } = do
-    destAddress <- get ins (addr + 1)
-    newIns <- set ins destAddress (head is)
-    run program { instructions = newIns, address = addr + 2, inputs = tail is }
+runSet :: [ParameterMode] -> Program -> Either String Program
+runSet _ program@Program { inputs = [] } = return program
+runSet parameterModes program@Program { instructions = ins, address = addr, inputs = is } = do
+    let destParameterMode = head parameterModes
+    destValue <- get ins (addr + 1)
+    newProgram <- setWithMode destParameterMode program destValue (head is)
+    run newProgram { address = addr + 2, inputs = tail is }
 
 runGet :: [ParameterMode] -> Program -> Either String Program
 runGet parameterModes program@Program { instructions = ins, address = addr, outputs = os } = do
     let parameterMode = head parameterModes
-    value <- getWithMode parameterMode ins (addr + 1)
+    value <- getWithMode parameterMode program (addr + 1)
     run program { address = addr + 2, outputs = value:os }
 
 runJumpIf :: Bool -> [ParameterMode] -> Program -> Either String Program
-runJumpIf nonZero parameterModes program@Program{instructions = prg, address = addr} = do
+runJumpIf nonZero parameterModes program@Program{instructions = ins, address = addr} = do
     let conditionParameterMode = head parameterModes
-    conditionValue <- getWithMode conditionParameterMode prg (addr + 1)
+    conditionValue <- getWithMode conditionParameterMode program (addr + 1)
     let destinationParameterMode = parameterModes !! 1
-    destinationValue <- getWithMode destinationParameterMode prg (addr + 2)
+    destinationValue <- getWithMode destinationParameterMode program (addr + 2)
     if (conditionValue /= 0) == nonZero
         then run program { address = destinationValue }
         else run program { address = addr + 3 }
 
-get :: Vector Int -> Int -> Either String Int
-get program address = maybe (Left "Invalid address") Right (program V.!? address)
+runSetRelativeBase :: [ParameterMode] -> Program -> Either String Program
+runSetRelativeBase parameterModes program@Program{instructions = ins, address = addr, relativeBase = rb} = do
+    let parameterMode = head parameterModes
+    value <- getWithMode parameterMode program (addr + 1)
+    run program { address = addr + 2, relativeBase = rb + value }
 
-getWithMode :: ParameterMode -> Vector Int -> Int -> Either String Int
-getWithMode Immediate program address = get program address
-getWithMode Position program address = get program address >>= get program
+getWithMode :: ParameterMode -> Program -> Int -> Either String Int
+getWithMode Position Program{instructions = ins} address = do
+    ref <- get ins address
+    get ins ref
+getWithMode Immediate Program{instructions = ins} address = get ins address
+getWithMode Relative Program{instructions = ins, relativeBase = rb} address = do
+    ref <- get ins address
+    get ins (ref + rb)
+
+get :: Vector Int -> Int -> Either String Int
+get instructions address = maybe (Left "Invalid address") Right (instructions V.!? address)
+
+setWithMode :: ParameterMode -> Program -> Int -> Int -> Either String Program
+setWithMode Position program@Program{instructions = ins} address value = do
+    newIns <- set ins address value
+    return program { instructions = newIns }
+setWithMode Immediate _ _ _ = Left "Invalid parameter mode: Immediate"
+setWithMode Relative program@Program{instructions = ins, relativeBase = rb} address value = do
+    newIns <- set ins (address + rb) value
+    return program { instructions = newIns }
 
 set :: Vector Int -> Int -> Int -> Either String (Vector Int)
 set instructions address value
@@ -115,6 +169,7 @@ parseInstructionType 5 = Right JumpIfTrue
 parseInstructionType 6 = Right JumpIfFalse
 parseInstructionType 7 = Right LessThan
 parseInstructionType 8 = Right Equals
+parseInstructionType 9 = Right SetRelativeBase
 parseInstructionType 99 = Right Exit
 parseInstructionType opCode = Left $ "Unrecognized instruction type: " ++ show opCode
 
@@ -126,4 +181,5 @@ parseParameterModes x = do
 parseParameterMode :: Char -> Either String ParameterMode
 parseParameterMode '0' = Right Position
 parseParameterMode '1' = Right Immediate
+parseParameterMode '2' = Right Relative
 parseParameterMode x = Left $ "Unrecognized parameter mode: " ++ show x
