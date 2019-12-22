@@ -34,6 +34,8 @@ main = hspec $
       outputs <$> runSrc "1102,34915192,34915192,7,4,7,99,0" `shouldBe` Right [1219070632396864]
       outputs <$> runSrc "104,1125899906842624,99" `shouldBe` Right [1125899906842624]
 
+      outputs <$> runSrc "104,1,104,2,104,3,99" `shouldBe` Right [1,2,3]
+
 runSrcWithInputs :: Text -> [Int] -> Either String Program
 runSrcWithInputs src inputs = do
     program <- parse src

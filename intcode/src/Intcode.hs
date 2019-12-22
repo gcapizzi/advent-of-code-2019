@@ -110,7 +110,7 @@ runGet :: [ParameterMode] -> Program -> Either String Program
 runGet parameterModes program@Program { instructions = ins, address = addr, outputs = os } = do
     let parameterMode = head parameterModes
     value <- getWithMode parameterMode program (addr + 1)
-    run program { address = addr + 2, outputs = value:os }
+    run program { address = addr + 2, outputs = os ++ [value] }
 
 runJumpIf :: Bool -> [ParameterMode] -> Program -> Either String Program
 runJumpIf nonZero parameterModes program@Program{instructions = ins, address = addr} = do
