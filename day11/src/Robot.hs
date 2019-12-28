@@ -89,7 +89,7 @@ showGrid Robot{grid = grd} = intercalate "\n" $ map (\y -> showRow y [minX..maxX
   where
     minX = minimum $ map x $ Map.keys grd
     maxX = maximum $ map x $ Map.keys grd
-    minY = minimum $ map x $ Map.keys grd
+    minY = minimum $ map y $ Map.keys grd
     maxY = maximum $ map y $ Map.keys grd
 
 showRow :: Int -> [Int] -> Map Position Colour -> String
